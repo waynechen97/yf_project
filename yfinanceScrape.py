@@ -14,6 +14,8 @@ import time
 # To do
 # Use system time to get the date
 # Use regex to extract the time from the scrape
+# Write periodically to csv
+path = r'C:\Python\Web Scrapping\yfinanceScrape.py'
 
 
 def convert24(str1):
@@ -88,7 +90,7 @@ def timeStampAdjustment(date_time, LiveTickersOnly=False, DelayedTickersOnly=Fal
         return str(date) + ' ' + str(timeProper)
 
 
-def ScrapeLiveQuotes(tickers, interval):
+def ScrapeLiveQuotes(tickers, scrape_interval):
 
     # Benchmark ticker for handling synchronous timestamps
     benchmark = tickers[0]
@@ -127,7 +129,17 @@ def ScrapeLiveQuotes(tickers, interval):
 
             quote_dict[ticker].append(price)
 
-    return print(quote_dict), print(datetime_dict)
+    df = {**datetime_dict, **quote_dict}
+
+    df = pd.DataFrame(df)
+    # df.to_csv(path = path,'file_{}_test_save_5m_interval'.format(count))
+    pathname = 'file_' + 'test' + '.csv'
+    df.to_csv(pathname, index=False)
+
+    min_scrapped = len(datetime_dict['DateTime'])
+    total_tickers = len(quote_dict.keys())
+
+    return print(f'Scrape Complete, Frequency: {scrape_interval} s | Minutes Scrapped: {min_scrapped} | Total Tickers: {total_tickers},')
 
 # Function Calls
 
@@ -137,11 +149,13 @@ def ScrapeLiveQuotes(tickers, interval):
 ticker_list = ["ES=F", "YM=F", "NQ=F", "GC=F", "SI=F", "CL=F"]
 quote_dict = dict()
 datetime_dict = dict()
+
 datetime_dict['DateTime'] = list()
 for ticker in ticker_list:
     quote_dict[ticker] = list()
 
 scrape_interval = 5  # seconds
+
 schedule.every(scrape_interval).seconds.do(
     ScrapeLiveQuotes, ticker_list, scrape_interval)
 
