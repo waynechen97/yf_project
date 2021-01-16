@@ -11,11 +11,35 @@ import os
 import schedule
 import time
 
-# To do
-# Use system time to get the date
-# Use regex to extract the time from the scrape
-# Write periodically to csv
 path = r'C:\Python\Web Scrapping\yfinanceScrape.py'
+scrapeInterval = 5  # seconds
+fileIdentifier = 'Bitcoin'
+ScrapeCount = 0
+
+
+def defineTickers(DelayedTickers=False, LiveTickers=False, BitcoinScrape=False):
+    if DelayedTickers:
+        ticker_list = ["ES=F", "YM=F", "NQ=F", "GC=F", "SI=F", "CL=F"]
+    elif LiveTickers:
+        ticker_list = ["FB", "AAPL", "AMZN", "TSLA", "GOOGL"]
+    elif BitcoinScrape:
+        ticker_list = ["BTC-USD"]
+
+    return ticker_list
+
+
+def defineEmptyDataStructure(ticker_list):
+    # Define quote_dict to store scrapped pries
+    # Define datetime_dict to store scrapped timestamps
+    quote_dict = dict()
+    datetime_dict = dict()
+
+    datetime_dict['DateTime'] = list()
+
+    for ticker in ticker_list:
+        quote_dict[ticker] = list()
+
+    return quote_dict, datetime_dict
 
 
 def convert24(str1):
@@ -90,74 +114,88 @@ def timeStampAdjustment(date_time, LiveTickersOnly=False, DelayedTickersOnly=Fal
         return str(date) + ' ' + str(timeProper)
 
 
-def ScrapeLiveQuotes(tickers, scrape_interval):
+def ScrapeLiveQuotes(tickers, scrapeInterval):
 
     # Benchmark ticker for handling synchronous timestamps
     benchmark = tickers[0]
-    r = requests.get(
-        "https://ca.finance.yahoo.com/quote/{}?p={}".format(benchmark, benchmark))
+
+    if 'BTC-USD' in tickers:
+        r = requests.get(
+            "https://ca.finance.yahoo.com/quote/{}".format(benchmark))
+    else:
+        r = requests.get(
+            "https://ca.finance.yahoo.com/quote/{}?p={}".format(benchmark, benchmark))
+
     soup = BeautifulSoup(r.text, "html.parser")
-    date_base = soup.find(
-        "div", {"id": "quote-market-notice"}).find("span").text
-    date_base = timeStampAdjustment(
-        date_time=date_base, DelayedTickersOnly=True)
 
-    # False means the dictionary is empty
-    if any(a != [] for a in datetime_dict.values()) == False:
-        datetime_dict['DateTime'].append(date_base)
-    elif date_base != datetime_dict['DateTime'][len(datetime_dict['DateTime']) - 1]:
-        datetime_dict['DateTime'].append(date_base)
+    try:
+        date_base = soup.find(
+            "div", {"id": "quote-market-notice"}).find("span").text
 
-        for idx, ticker in enumerate(ticker_list):
-            r = requests.get(
-                "https://ca.finance.yahoo.com/quote/{}?p={}".format(ticker, ticker))
-            soup = BeautifulSoup(r.text, "html.parser")
+        date_base = timeStampAdjustment(
+            date_time=date_base, DelayedTickersOnly=True)
 
-            price = soup.find(
-                "span", {"class": "Trsdu(0.3s) Fw(b) Fz(36px) Mb(-4px) D(ib)"}).text
+        # False means the dictionary is empty
+        if any(a != [] for a in datetime_dict.values()) == False:
+            datetime_dict['DateTime'].append(date_base)
+        elif date_base != datetime_dict['DateTime'][len(datetime_dict['DateTime']) - 1]:
+            datetime_dict['DateTime'].append(date_base)
 
-            quote_dict[ticker].append(price)
+            for idx, ticker in enumerate(ticker_list):
+                if 'BTC-USD' in tickers:
+                    r = requests.get(
+                        "https://ca.finance.yahoo.com/quote/{}".format(benchmark))
+                else:
+                    r = requests.get(
+                        "https://ca.finance.yahoo.com/quote/{}?p={}".format(benchmark, benchmark))
+                soup = BeautifulSoup(r.text, "html.parser")
 
-    if any(a != [] for a in quote_dict.values()) == False:
-        for idx, ticker in enumerate(ticker_list):
-            r = requests.get(
-                "https://ca.finance.yahoo.com/quote/{}?p={}".format(ticker, ticker))
-            soup = BeautifulSoup(r.text, "html.parser")
+                price = soup.find(
+                    "span", {"class": "Trsdu(0.3s) Fw(b) Fz(36px) Mb(-4px) D(ib)"}).text
 
-            price = soup.find(
-                "span", {"class": "Trsdu(0.3s) Fw(b) Fz(36px) Mb(-4px) D(ib)"}).text
+                quote_dict[ticker].append(price)
 
-            quote_dict[ticker].append(price)
+        if any(a != [] for a in quote_dict.values()) == False:
+            for idx, ticker in enumerate(ticker_list):
+                if 'BTC-USD' in tickers:
+                    r = requests.get(
+                        "https://ca.finance.yahoo.com/quote/{}".format(benchmark))
+                else:
+                    r = requests.get(
+                        "https://ca.finance.yahoo.com/quote/{}?p={}".format(benchmark, benchmark))
+                soup = BeautifulSoup(r.text, "html.parser")
 
-    df = {**datetime_dict, **quote_dict}
+                price = soup.find(
+                    "span", {"class": "Trsdu(0.3s) Fw(b) Fz(36px) Mb(-4px) D(ib)"}).text
 
-    df = pd.DataFrame(df)
-    # df.to_csv(path = path,'file_{}_test_save_5m_interval'.format(count))
-    pathname = 'file_' + 'test' + '.csv'
-    df.to_csv(pathname, index=False)
+                quote_dict[ticker].append(price)
 
-    min_scrapped = len(datetime_dict['DateTime'])
-    total_tickers = len(quote_dict.keys())
+        df = {**datetime_dict, **quote_dict}
 
-    return print(f'Scrape Complete, Frequency: {scrape_interval} s | Minutes Scrapped: {min_scrapped} | Total Tickers: {total_tickers},')
+        df = pd.DataFrame(df)
+        # df.to_csv(path = path,'file_{}_test_save_5m_interval'.format(count))
+        pathname = 'file_' + fileIdentifier + '.csv'
+        df.to_csv(pathname, index=False)
 
-# Function Calls
+        min_scrapped = len(datetime_dict['DateTime'])
+        total_tickers = len(quote_dict.keys())
+
+        global ScrapeCount
+        ScrapeCount += 1
+
+        return print(f'Scrape Complete, Frequency: {scrapeInterval} s | Minutes Scrapped: {min_scrapped} | Total Tickers: {total_tickers} | Successful Scrapes: {ScrapeCount}')
+
+    except Exception:
+        print('Scrapped Failed, Recovering and Trying Again...')
+
+# Function Calls to Initiate Scrape
 
 
-# ticker_list = ["FB", "AAPL", "AMZN", "TSLA", "GOOGL"] # Regular Hour Trading Tickers
-# Outside of Regular Trading Hour Trading Tickers
-ticker_list = ["ES=F", "YM=F", "NQ=F", "GC=F", "SI=F", "CL=F"]
-quote_dict = dict()
-datetime_dict = dict()
+ticker_list = defineTickers(BitcoinScrape=True)
+quote_dict, datetime_dict = defineEmptyDataStructure(ticker_list)
 
-datetime_dict['DateTime'] = list()
-for ticker in ticker_list:
-    quote_dict[ticker] = list()
-
-scrape_interval = 5  # seconds
-
-schedule.every(scrape_interval).seconds.do(
-    ScrapeLiveQuotes, ticker_list, scrape_interval)
+schedule.every(scrapeInterval).seconds.do(
+    ScrapeLiveQuotes, ticker_list, scrapeInterval)
 
 while True:
     schedule.run_pending()
